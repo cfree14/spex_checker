@@ -99,14 +99,23 @@ server <- function(input, output, session) {
             TRUE ~ NA_real_
           )
         ) %>%
-        mutate(sigma_adj = sigma * (1 + r * (nyr_since_assessed - 1))) %>%
-        mutate(buffer_calc = 1 - qlnorm(pstar, meanlog = 0, sdlog = sigma_adj)) %>%
+        # Add time varying sigma
+        mutate(sigma_adj=case_when(category==3 ~ 2.0,
+                                   category %in% 1:2 ~ sigma * (1 + r * (nyr_since_assessed-1)),
+                                   T ~ NA)) %>% 
+        # Cap sigma
+        mutate(sigma_adj_cap=pmin(sigma_adj, 2)) %>% 
+        # Calculate buffer
+        mutate(buffer_calc = 1 - qlnorm(pstar, meanlog = 0, sdlog = sigma_adj_cap)) %>%
+        # Calculate ABC
         mutate(abc_calc = ofl * (1 - buffer_calc)) %>%
+        # Compute differences
         mutate(buffer_diff = buffer_calc - buffer,
                abc_diff    = abc_calc - abc) %>%
+        # Arrange
         select(
           stock_id, assess_year, year, nyr_since_assessed,
-          category, sigma, sigma_adj, pstar,
+          category, sigma, sigma_adj, sigma_adj_cap, pstar,
           buffer, buffer_calc, buffer_diff,
           ofl, abc, abc_calc, abc_diff, acl
         ) %>%
@@ -117,6 +126,7 @@ server <- function(input, output, session) {
           abc_calc    = round(abc_calc, 4),
           abc_diff = round(buffer_diff, 4),
           sigma_adj = round(sigma_adj, 4),
+          sigma_adj_cap = round(sigma_adj_cap, 4),
         )
       
       out
@@ -169,3 +179,5 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
+
+
