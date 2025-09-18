@@ -31,7 +31,15 @@ ui <- fluidPage(
         downloadButton("download_csv", "Download table (CSV)")
       )
     ),
+    
+    # Explanatory text
+    p("The size of the buffer between the OFL and ABC is determined based on the PFMC's risk tolerance choice (Pstar) and the SSC's assessment of scientific uncertainty (sigma). The base scientific uncertainty (in the year of the assessment) is usually equal to the default value associated with the assessment's data-richness category, though values different from the defaults can be used by the SSC. The magnitude of the scientific uncertainty is asusmed to increase with assessment age. The slope of this increase is 0.075/year when natural mortality (m) is less than 0.15 and varies based on natural mortality when natural mortality is greater than 0.15."),
+    p("As a result, the derivation of the ABC buffer requires four values: Pstar, the base sigma, the age of the assessment, and the natural mortality. This application assumes that the default sigma for each category is used unless a sigma value is explicitly provided. Thus, this app requires either a category or a sigma to be specified. The app also assumes that all natural mortalities are less than 0.15 unless a natural mortality is specified."),
+    p("Note that the app currently assumes that the provided buffer represents the size of the reduction (e.g., 6%) rather than the ratio of the ABC to the OFL (e.g., 94%)."),
+    
+    # Required columns
     uiOutput("messages")  # explanatory text shown ABOVE the table
+    
   ),
   
   # --- Results table BELOW ---
@@ -62,7 +70,7 @@ server <- function(input, output, session) {
   
   required_cols <- c(
     "stock_id", "assess_year", "year", "category", "pstar",
-    "buffer", "ofl", "abc", "acl"
+    "buffer", "ofl", "abc"
   )
   
   err_msg <- reactiveVal(NULL)
@@ -74,8 +82,18 @@ server <- function(input, output, session) {
     r <- 0.075  # fixed
     
     tryCatch({
-      df <- data_orig() %>% janitor::clean_names("snake")
       
+      # Clean column names
+      df <- data_orig() %>% 
+        janitor::clean_names("snake")
+      
+      # Add sigma column if there isn't one
+      sigma_yn <- "sigma" %in% colnames(df)
+      if(sigma_yn==F){
+        df$sigma <- NA
+      }
+      
+      # Check if columns are missing
       missing <- setdiff(required_cols, names(df))
       if (length(missing) > 0) {
         stop(sprintf(
@@ -84,19 +102,23 @@ server <- function(input, output, session) {
         ))
       }
       
+      # Check if any columns aren't numbers
       numeric_cols <- c("year", "assess_year", "category", "pstar", "buffer", "ofl", "abc", "acl")
       for (cc in numeric_cols) {
         if (!is.numeric(df[[cc]])) suppressWarnings(df[[cc]] <- as.numeric(df[[cc]]))
       }
       
+      # Build results table
       out <- df %>%
+        # Calculaye years since last assessment
         mutate(nyr_since_assessed = year - assess_year) %>%
+        # Fill missing sigmas based on category
         mutate(
           sigma = case_when(
-            category == 1 ~ 0.5,
-            category == 2 ~ 1.0,
-            category == 3 ~ 2.0,
-            TRUE ~ NA_real_
+            is.na(sigma) & category == 1 ~ 0.5,
+            is.na(sigma) & category == 2 ~ 1.0,
+            is.na(sigma) & category == 3 ~ 2.0,
+            TRUE ~ sigma
           )
         ) %>%
         # Add time varying sigma
@@ -137,6 +159,7 @@ server <- function(input, output, session) {
     })
   })
   
+  # Results table
   output$results_table <- renderDT({
     validate(
       need(!is.null(processed()), if (!is.null(err_msg())) paste("Processing error:", err_msg()) else "Upload a file to begin.")
@@ -157,6 +180,7 @@ server <- function(input, output, session) {
     )
   })
   
+  # Download CSV button
   output$download_csv <- downloadHandler(
     filename = function() paste0("abc_buffer_output_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv"),
     content  = function(file) {
@@ -165,17 +189,19 @@ server <- function(input, output, session) {
     }
   )
   
+  # Required columns
   output$messages <- renderUI({
     tagList(
       tags$p(
         style = "color:#555;",
-        "Column names are cleaned to snake_case. Required columns: ",
+        "Required columns: ",
         code(paste(required_cols, collapse = ", ")), "."
       ),
       if (!is.null(err_msg()))
         tags$p(style = "color:#b00020; font-weight:600;", paste("Processing error:", err_msg()))
     )
   })
+  
 }
 
 shinyApp(ui, server)

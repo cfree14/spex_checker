@@ -6,9 +6,10 @@ library(tidyverse)
 
 # Read data
 data_orig <- readxl::read_excel("data-raw/Harvest-Specifications_2027-28_GFSC_090425.xls.xlsx")
+data_orig <-  readxl::read_excel("data-raw/quillback.xlsx")
 
 # See this helpful function
-# 
+PEPtools::get_buffer(years=0:5, sigma=0.75, pstar=0.45)
 
 # Format data
 r <- 0.075
@@ -18,10 +19,10 @@ data <- data_orig %>%
   # Add year since assessment
   mutate(nyr_since_assessed=year-assess_year) %>% 
   # Add sigma
-  mutate(sigma=case_when(category==1 ~ 0.5,
-                         category==2 ~ 1.0,
-                         category==3 ~ 2.0,
-                         T ~ NA)) %>% 
+  mutate(sigma=case_when(is.na(sigma) & category==1 ~ 0.5,
+                         is.na(sigma) & category==2 ~ 1.0,
+                         is.na(sigma) & category==3 ~ 2.0,
+                         T ~ sigma)) %>% 
   # Add SD
   mutate(sigma_adj=case_when(category==3 ~ 2.0,
                              category %in% 1:2 ~ sigma * (1 + r * (nyr_since_assessed-1)),
