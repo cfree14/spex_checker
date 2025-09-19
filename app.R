@@ -44,7 +44,7 @@ ui <- fluidPage(
           tags$li(tags$b("m:*"), " Natural mortality rate"),
           tags$li(tags$b("slope:"), " Slope of the time-varying increase in sigma"),
           tags$li(tags$b("sigma_adj:"), " Time-varying sigma (uncapped)"),
-          tags$li(tags$b("sigma_adj_cap:"), " Capped time-varying sigma (uncapped)")
+          tags$li(tags$b("sigma_adj_cap:"), " Capped time-varying sigma")
         )
       ),
       column(
