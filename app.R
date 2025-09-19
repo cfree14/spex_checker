@@ -10,6 +10,23 @@ ui <- fluidPage(
   titlePanel("ABC Buffer Calculator"),
   
   # --- Controls and instructions ABOVE the table ---
+  
+  # Explanatory text
+  wellPanel(
+    p("The size of the buffer between the OFL and ABC is determined based on the Council's risk tolerance choice (P*, Pstar) and the SSC's assessment of scientific uncertainty (σ, sigma). The base scientific uncertainty (in the year of the assessment) is usually equal to the default value associated with the assessment's data-richness category (Category 1=0.5, Category 2=1.0, Category 3=2.0), though values different from the defaults can be used by the SSC."),
+    p("The magnitude of the scientific uncertainty is assumed to increase with assessment age. The slope of this increase is 0.075/year when natural mortality (M) is less than 0.15. When natural mortality is greater than 0.15, the slope is calculated as 0.52 times the natural mortality. If natural mortality is sex-specific, the geometric mean of the male and female mortality rates is used."),
+    p("As a result, the derivation of the ABC buffer requires four values: (1) Pstar, (2) the base sigma, (3) the age of the assessment, and (4) the natural mortality. This application assumes that the default sigma for each category is used unless a sigma value is provided in the uploaded “sigma” column. Thus, this app requires either a category or a sigma to be specified. The app also assumes that all natural mortalities are less than 0.15 unless a natural mortality is provided in the uploaded “m” column."),
+    p("Note that the app currently assumes that the provided buffer represents the size of the reduction (e.g., 6%) rather than the ratio of the ABC to the OFL (e.g., 94%)."),
+    p("The code for the app is available here: ",
+      tags$a(
+        href = "https://github.com/cfree14/spex_checker/",
+        "https://github.com/cfree14/spex_checker/",
+        target = "_blank"
+      )
+    )  
+  ),
+  
+  # File upload
   wellPanel(
     fluidRow(
       column(
@@ -31,11 +48,6 @@ ui <- fluidPage(
         downloadButton("download_csv", "Download table (CSV)")
       )
     ),
-    
-    # Explanatory text
-    p("The size of the buffer between the OFL and ABC is determined based on the PFMC's risk tolerance choice (Pstar) and the SSC's assessment of scientific uncertainty (sigma). The base scientific uncertainty (in the year of the assessment) is usually equal to the default value associated with the assessment's data-richness category, though values different from the defaults can be used by the SSC. The magnitude of the scientific uncertainty is asusmed to increase with assessment age. The slope of this increase is 0.075/year when natural mortality (m) is less than 0.15 and varies based on natural mortality when natural mortality is greater than 0.15."),
-    p("As a result, the derivation of the ABC buffer requires four values: Pstar, the base sigma, the age of the assessment, and the natural mortality. This application assumes that the default sigma for each category is used unless a sigma value is explicitly provided. Thus, this app requires either a category or a sigma to be specified. The app also assumes that all natural mortalities are less than 0.15 unless a natural mortality is specified."),
-    p("Note that the app currently assumes that the provided buffer represents the size of the reduction (e.g., 6%) rather than the ratio of the ABC to the OFL (e.g., 94%)."),
     
     # Required columns
     uiOutput("messages")  # explanatory text shown ABOVE the table

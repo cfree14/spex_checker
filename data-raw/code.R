@@ -9,6 +9,7 @@ data_orig <- readxl::read_excel("data-raw/Harvest-Specifications_2027-28_GFSC_09
 data_orig <-  readxl::read_excel("data-raw/quillback.xlsx")
 
 # See this helpful function
+# https://github.com/pfmc-assessments/PEPtools/blob/main/R/buffer_fxn.R
 PEPtools::get_buffer(years=0:5, sigma=0.75, pstar=0.45)
 
 # Format data
