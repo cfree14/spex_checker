@@ -13,6 +13,7 @@ ui <- fluidPage(
   
   # Explanatory text
   wellPanel(
+    h3("App description"),
     p("The size of the buffer between the OFL and ABC is determined based on the Council's risk tolerance choice (P*, Pstar) and the SSC's assessment of scientific uncertainty (σ, sigma). The base scientific uncertainty (in the year of the assessment) is usually equal to the default value associated with the assessment's data-richness category (Category 1=0.5, Category 2=1.0, Category 3=2.0), though values different from the defaults can be used by the SSC."),
     p("The magnitude of the scientific uncertainty is assumed to increase with assessment age. The slope of this increase is 0.075/year when natural mortality (M) is less than 0.15. When natural mortality is greater than 0.15, the slope is calculated as 0.52 times the natural mortality. If natural mortality is sex-specific, the geometric mean of the male and female mortality rates is used."),
     p("As a result, the derivation of the ABC buffer requires four values: (1) Pstar, (2) the base sigma, (3) the age of the assessment, and (4) the natural mortality. This application assumes that the default sigma for each category is used unless a sigma value is provided in the uploaded “sigma” column. Thus, this app requires either a category or a sigma to be specified. The app also assumes that all natural mortalities are less than 0.15 unless a natural mortality is provided in the uploaded “m” column."),
@@ -24,6 +25,43 @@ ui <- fluidPage(
         target = "_blank"
       )
     )  
+  ),
+  
+  # Column definitions
+  wellPanel(
+    h3("Column definitions"),
+    p("* indicates columns that are provided as inputs; other columns are derived by the app"),
+    fluidRow(
+      column(
+        6,
+        tags$ul(
+          tags$li(tags$b("stock_id:*"), " Stock id"),
+          tags$li(tags$b("assess_year:*"), " Year of assessment"),
+          tags$li(tags$b("year:*"), " Year"),
+          tags$li(tags$b("nyr_since_assessment:"), " Number of years since the assessment"),
+          tags$li(tags$b("category:*"), " Category of assessment (1, 2, or 3)"),
+          tags$li(tags$b("sigma:*"), " Base sigma"),
+          tags$li(tags$b("m:*"), " Natural mortality rate"),
+          tags$li(tags$b("slope:"), " Slope of the time-varying increase in sigma"),
+          tags$li(tags$b("sigma_adj:"), " Time-varying sigma (uncapped)"),
+          tags$li(tags$b("sigma_adj_cap:"), " Capped time-varying sigma (uncapped)")
+        )
+      ),
+      column(
+        6,
+        tags$ul(
+          tags$li(tags$b("pstar:*"), " Risk tolerance policy (P*)"),
+          tags$li(tags$b("buffer:*"), " The reported buffer"),
+          tags$li(tags$b("buffer_calc:"), " The buffer calculated by the app"),
+          tags$li(tags$b("buff_diff:"), " The difference between the reported and calculated buffer (0=agreement)"),
+          tags$li(tags$b("ofl:*"), " Overfishing limit (OFL)"),
+          tags$li(tags$b("abc:*"), " Acceptable biological catch (ABC)"),
+          tags$li(tags$b("abc_calc:"), " The ABC calculated by the app"),
+          tags$li(tags$b("abc_diff:"), " The difference between the reported and calculated ABC (0=agreement)"),
+          tags$li(tags$b("acl:*"), " Annual catch limit (ACL)")
+        )
+      )
+    )
   ),
   
   # File upload
@@ -40,17 +78,24 @@ ui <- fluidPage(
             "application/vnd.ms-excel"
           )
         )
-      ),
-      column(
-        width = 6,
-        uiOutput("sheet_picker"),
-        br(),
-        downloadButton("download_csv", "Download table (CSV)")
       )
+      # column(
+      #   width = 6,
+      #   uiOutput("sheet_picker"),
+      #   br(),
+      #   downloadButton("download_csv", "Download table (CSV)")
+      # )
     ),
     
     # Required columns
-    uiOutput("messages")  # explanatory text shown ABOVE the table
+    uiOutput("messages"),  # explanatory text shown ABOVE the table
+    
+    # Checkbox
+    checkboxInput(
+      inputId = "only_diff",
+      label   = "Reduce to rows where the buffers need checking:",
+      value   = FALSE
+    )
     
   ),
   
@@ -91,7 +136,7 @@ server <- function(input, output, session) {
     req(data_orig())
     err_msg(NULL)
     
-    r <- 0.075  # fixed
+    # r <- 0.075  # fixed
     
     tryCatch({
       
@@ -103,6 +148,12 @@ server <- function(input, output, session) {
       sigma_yn <- "sigma" %in% colnames(df)
       if(sigma_yn==F){
         df$sigma <- NA
+      }
+      
+      # Add M if there isn't one
+      m_yn <- "m" %in% colnames(df)
+      if(m_yn==F){
+        df$m <- 0.15
       }
       
       # Check if columns are missing
@@ -133,9 +184,13 @@ server <- function(input, output, session) {
             TRUE ~ sigma
           )
         ) %>%
+        # Fill missing natural mortalities
+        mutate(m=ifelse(is.na(m), 0.15, m)) %>% 
+        # Add slope of time-varing sigma increase
+        mutate(slope=ifelse(m<=0.15, 0.075, 0.52*m)) %>% 
         # Add time varying sigma
         mutate(sigma_adj=case_when(category==3 ~ 2.0,
-                                   category %in% 1:2 ~ sigma * (1 + r * (nyr_since_assessed-1)),
+                                   category %in% 1:2 ~ sigma * (1 + slope * (nyr_since_assessed-1)),
                                    T ~ NA)) %>% 
         # Cap sigma
         mutate(sigma_adj_cap=pmin(sigma_adj, 2)) %>% 
@@ -144,25 +199,21 @@ server <- function(input, output, session) {
         # Calculate ABC
         mutate(abc_calc = ofl * (1 - buffer_calc)) %>%
         # Compute differences
-        mutate(buffer_diff = buffer_calc - buffer,
-               abc_diff    = abc_calc - abc) %>%
+        mutate(buffer_diff = abs(buffer_calc - buffer),
+               abc_diff    = abs(abc_calc - abc)) %>%
         # Arrange
         select(
           stock_id, assess_year, year, nyr_since_assessed,
-          category, sigma, sigma_adj, sigma_adj_cap, pstar,
+          category, sigma, m, slope, sigma_adj, sigma_adj_cap, pstar,
           buffer, buffer_calc, buffer_diff,
           ofl, abc, abc_calc, abc_diff, acl
         ) %>%
-        # Round units for display
-        mutate(
-          buffer_calc = round(buffer_calc, 3),
-          buffer_diff = round(buffer_diff, 3),
-          abc_calc    = round(abc_calc, 4),
-          abc_diff = round(buffer_diff, 4),
-          sigma_adj = round(sigma_adj, 4),
-          sigma_adj_cap = round(sigma_adj_cap, 4),
-        )
-      
+        # Round units for display (3 sig figs)
+        mutate_at(vars(m, slope, 
+                       sigma_adj, sigma_adj_cap, 
+                       buffer, buffer_calc, buffer_diff), function(x) round(x, 3)) %>% 
+        # Round units for display (1 sig figs)
+        mutate_at(vars(abc_calc, abc_diff), function(x) round(x, 1)) 
       out
     },
     error = function(e) {
@@ -171,13 +222,24 @@ server <- function(input, output, session) {
     })
   })
   
+  # Filter to buff != 0
+  filtered <- reactive({
+    req(processed())
+    if (isTRUE(input$only_diff)) {
+      # Use a tiny tolerance in case of rounding
+      dplyr::filter(processed(), abs(buffer_diff) > 1e-12)
+    } else {
+      processed()
+    }
+  })
+  
   # Results table
   output$results_table <- renderDT({
     validate(
-      need(!is.null(processed()), if (!is.null(err_msg())) paste("Processing error:", err_msg()) else "Upload a file to begin.")
+      need(!is.null(filtered()), if (!is.null(err_msg())) paste("Processing error:", err_msg()) else "Upload a file to begin.")
     )
     datatable(
-      processed(),
+      filtered(),
       rownames = FALSE,
       filter = "top",
       options = list(

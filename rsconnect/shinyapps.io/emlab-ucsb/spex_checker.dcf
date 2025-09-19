@@ -5,7 +5,7 @@ account: emlab-ucsb
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 15427040
-bundleId: 10913424
+bundleId: 10927714
 url: https://emlab-ucsb.shinyapps.io/spex_checker/
 version: 1
 asMultiple: FALSE
